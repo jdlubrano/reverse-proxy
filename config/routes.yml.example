@@ -1,0 +1,4 @@
+routes:
+  - incoming_request_path: '/hello'
+    forwarded_request_url: 'http://localhost:3000'
+    forwarded_request_path: '/api/ping'
