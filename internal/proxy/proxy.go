@@ -19,6 +19,7 @@ type Proxy struct {
 	logger       logger.Logger
 	routesConfig *routes.RoutesConfig
 	port         int
+	serveMux     *http.ServeMux
 	server       *http.Server
 }
 
@@ -31,22 +32,25 @@ func NewProxy(logger logger.Logger, routesConfig *routes.RoutesConfig, port int)
 		logger:       logger,
 		routesConfig: routesConfig,
 		port:         port,
+		serveMux:     http.NewServeMux(),
 		server:       nil,
 	}
 }
 
-func (p *Proxy) Start() {
-	proxyMux := http.NewServeMux()
+func (p *Proxy) AddCustomHandler(path string, handler http.Handler) {
+	p.serveMux.Handle(path, handler)
+}
 
+func (p *Proxy) Start() {
 	for _, route := range p.routesConfig.Routes {
-		proxyMux.Handle(route.IncomingRequestPath, p.makeHandler(route))
+		p.serveMux.Handle(route.IncomingRequestPath, p.makeHandler(route))
 	}
 
 	addr := fmt.Sprintf(":%d", p.port)
 
 	p.server = &http.Server{
 		Addr:         addr,
-		Handler:      proxyMux,
+		Handler:      p.serveMux,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}

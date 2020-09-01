@@ -82,6 +82,29 @@ The `main.go` file in this repo attempts to be a barebones example of how to
 start the `Proxy` within a Go app.  Some of the features of the reverse proxy
 are not used in `main.go`, however.
 
+#### Custom Handlers
+
+If you need to add an endpoint to your proxy, you can add a custom `http.Handler`.
+This can be especially helpful if you need to configure a healthcheck endpoint
+or something of that nature.
+
+```go
+import (
+        "net/http"
+
+	"github.com/jdlubrano/reverse-proxy/internal/proxy"
+)
+
+handlerFunc := func(w http.ResponseWriter, r *http.Request) {
+        w.WriteHeader(200)
+        w.Write([]byte(`{"status": "OK"}`))
+}
+
+proxy := proxy.NewProxy(...)
+proxy.AddCustomHandler("/healthcheck", http.HandlerFunc(handlerFunc))
+// ...start the proxy
+```
+
 #### Request Middleware
 
 Coming soon!
