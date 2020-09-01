@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestProxyService(t *testing.T) {
+func TestProxy(t *testing.T) {
 	downstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/error" {
 			w.Header().Set("Content-Type", "application/json")
@@ -59,33 +59,33 @@ func TestProxyService(t *testing.T) {
 	defer downstreamServer.Close()
 
 	errorRoute := routes.Route{
-		IncomingRequestPath: "/test/error",
-		InternalURL:         downstreamServer.URL,
-		InternalRequestPath: "/error",
+		IncomingRequestPath:  "/test/error",
+		ForwardedRequestURL:  downstreamServer.URL,
+		ForwardedRequestPath: "/error",
 	}
 
 	successRoute := routes.Route{
-		IncomingRequestPath: "/test/success",
-		InternalURL:         downstreamServer.URL,
-		InternalRequestPath: "/success",
+		IncomingRequestPath:  "/test/success",
+		ForwardedRequestURL:  downstreamServer.URL,
+		ForwardedRequestPath: "/success",
 	}
 
 	headersRoute := routes.Route{
-		IncomingRequestPath: "/test/headers",
-		InternalURL:         downstreamServer.URL,
-		InternalRequestPath: "/headers",
+		IncomingRequestPath:  "/test/headers",
+		ForwardedRequestURL:  downstreamServer.URL,
+		ForwardedRequestPath: "/headers",
 	}
 
 	bodyRoute := routes.Route{
-		IncomingRequestPath: "/test/body",
-		InternalURL:         downstreamServer.URL,
-		InternalRequestPath: "/body",
+		IncomingRequestPath:  "/test/body",
+		ForwardedRequestURL:  downstreamServer.URL,
+		ForwardedRequestPath: "/body",
 	}
 
 	queryRoute := routes.Route{
-		IncomingRequestPath: "/test/query",
-		InternalURL:         downstreamServer.URL,
-		InternalRequestPath: "/query",
+		IncomingRequestPath:  "/test/query",
+		ForwardedRequestURL:  downstreamServer.URL,
+		ForwardedRequestPath: "/query",
 	}
 
 	routesConfig := &routes.RoutesConfig{
@@ -110,6 +110,14 @@ func TestProxyService(t *testing.T) {
 
 	t.Run("when incoming request does not match any Routes", func(t *testing.T) {
 		resp, err := http.Get("http://localhost:8080/not_found")
+		defer resp.Body.Close()
+
+		assert.Nil(err)
+		assert.Equal(404, resp.StatusCode)
+	})
+
+	t.Run("when incoming request does not quite match any Routes", func(t *testing.T) {
+		resp, err := http.Get("http://localhost:8080/test/error/specific_error")
 		defer resp.Body.Close()
 
 		assert.Nil(err)
