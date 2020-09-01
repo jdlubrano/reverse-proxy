@@ -194,3 +194,33 @@ func TestProxy(t *testing.T) {
 		assert.Equal(string(body), `{"received": "test"}`)
 	})
 }
+
+func TestProxyCustomHandler(t *testing.T) {
+	routesConfig := &routes.RoutesConfig{}
+	logger := &logger.NullLogger{}
+	proxy := NewProxy(logger, routesConfig, 8080)
+
+	handlerFunc := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(200)
+		w.Write([]byte(`{"status": "OK"}`))
+	}
+
+	proxy.AddCustomHandler("/healthcheck", http.HandlerFunc(handlerFunc))
+
+	go func() {
+		proxy.Start()
+	}()
+	defer proxy.Stop()
+
+	assert := assert.New(t)
+	resp, err := http.Get("http://localhost:8080/healthcheck")
+
+	assert.Nil(err)
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	assert.Nil(err)
+	assert.Equal(200, resp.StatusCode)
+	assert.Equal(`{"status": "OK"}`, string(body))
+}
