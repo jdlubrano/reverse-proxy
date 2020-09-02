@@ -1,5 +1,7 @@
 # reverse-proxy
 
+![Tests](https://github.com/jdlubrano/reverse-proxy/workflows/Tests/badge.svg)
+
 ## Problem
 
 For organizations that choose to host their services on an "internal" network,
