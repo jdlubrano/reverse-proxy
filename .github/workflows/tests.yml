@@ -11,7 +11,7 @@ env:
 
 jobs:
   test:
-    name: Build
+    name: Test
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go 1.x
