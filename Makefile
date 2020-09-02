@@ -24,4 +24,7 @@ docker-build: build
 docker-push: docker-build
 	@docker push ${DOCKER_NAME}
 
-.PHONY: test build format start-dev
+modupdate: ## Bump the minor for all dependencies in the go.mod
+	@go get -u ./...
+
+.PHONY: test build format start-dev modupdate
