@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jdlubrano/reverse-proxy/internal/logger"
+	"github.com/jdlubrano/reverse-proxy/internal/middleware"
 	"github.com/jdlubrano/reverse-proxy/internal/routes"
 	"github.com/stretchr/testify/assert"
 )
