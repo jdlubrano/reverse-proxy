@@ -82,7 +82,12 @@ Docker image from that Dockerfile and `docker run` the reverse proxy.
 
 The `main.go` file in this repo attempts to be a barebones example of how to
 start the `Proxy` within a Go app.  Some of the features of the reverse proxy
-are not used in `main.go`, however.
+are not used in `main.go`, however.  There are essentially three ways to
+customize the behavior of a `Proxy`.
+
+1. Custom `http.Handler`s
+1. Adding `RequestMiddleware`
+1. Adding `RoundtripMiddleware`
 
 #### Custom Handlers
 
@@ -131,7 +136,7 @@ as
 type RequestMiddleware func(next RequestPreparer) RequestPreparer
 ```
 
-By accepting a `next` parameter, you can easily make your middleware integrate
+By accepting a `next` parameter, you ensure that your middleware integrates
 with existing `RequestMiddleware`.
 
 For example, you could add a header to the outgoing request:
@@ -146,7 +151,8 @@ func AddMyHeader(next middleware.RequestPreparer) middleware.RequestPreparer {
 ```
 
 You can insert your `RequestMiddleware` anywhere in the `RequestMiddleware`
-chain of your `Proxy`.
+chain of your `Proxy`.  `RequestMiddleware` at the end of the chain runs after
+`RequestMiddleware` at the beginning of the chain.
 
 ```go
 import (
@@ -169,10 +175,8 @@ proxy.RequestMiddleware = append([]middleware.RequestMiddleware{AddMyHeader}, ..
 // ...start the proxy
 ```
 
-`RequestMiddleware` at the end of the chain runs after `RequestMiddleware` at
-the beginning of the chain.  The default middleware chain does three things
-that are most likely desired behavior for a reverse proxy.  Namely the default
-request middleware:
+The default middleware chain does three things that are most likely desired
+behavior for a reverse proxy.  Namely the default request middleware:
 
 1. Copies request headers from `incoming` to `outgoing`. (`CopyHeaders`)
 2. Copies the request body from `incoming` to `outgoing`. (`CopyBody`)
@@ -231,9 +235,9 @@ to the `next` middleware.
 
 ## Development
 
-Build the project
+Build and test the project
 ```
-go build
+make build && make test
 ```
 
 Start the Reverse Proxy
