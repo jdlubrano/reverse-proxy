@@ -109,7 +109,74 @@ proxy.AddCustomHandler("/healthcheck", http.HandlerFunc(handlerFunc))
 
 #### Request Middleware
 
-Coming soon!
+Request middleware is designed to modify the outgoing request that eventually
+gets forwarded to the configured route/destination.  There are two types to
+be aware of when it comes to implementing your own request middleware.
+
+The first type is a `RequestPreparer`.  A `RequestPreparer` is defined as a
+
+```go
+type RequestPreparer func(incoming *http.Request, outgoing *http.Request) error
+```
+
+The `incoming` request is the request received by the proxy.  The `outgoing`
+request is the request that will eventually be forwarded a downstream location
+(as configured by the routes).
+
+You will most likely not define a `RequestPreparer`, however.  You are far
+more likely to define a `RequestMiddleware`.  A `RequestMiddleware` is defined
+as
+
+```go
+type RequestMiddleware func(next RequestPreparer) RequestPreparer
+```
+
+By accepting a `next` parameter, you can easily make your middleware integrate
+with existing `RequestMiddleware`.
+
+For example, you could add a header to the outgoing request:
+
+```go
+func AddMyHeader(next middleware.RequestPreparer) middleware.RequestPreparer {
+        return func(incoming *http.Request, outgoing *http.Request) error {
+                outgoing.Header.Add("My-Header", "My Content")
+                return next(incoming, outgoing)
+        }
+}
+```
+
+You can insert your `RequestMiddleware` anywhere in the `RequestMiddleware`
+chain of your `Proxy`.
+
+```go
+import (
+        "net/http"
+
+	"github.com/jdlubrano/reverse-proxy/internal/middleware"
+	"github.com/jdlubrano/reverse-proxy/internal/proxy"
+)
+
+proxy := proxy.NewProxy(...)
+
+// Adding middleware to the end of the middleware chain
+proxy.RequestMiddleware = append(proxy.RequestMiddleware, AddMyHeader)
+
+// Adding middleware to the start of the middleware chain.
+// Note that the default middleware would run after your custom middleware in
+// this case.  The default middleware may undo whatever your middlware is doing.
+proxy.RequestMiddleware = append([]middleware.RequestMiddleware{AddMyHeader}, ...proxy.RequestMiddleware)
+
+// ...start the proxy
+```
+
+`RequestMiddleware` at the end of the chain runs after `RequestMiddleware` at
+the beginning of the chain.  The default middleware chain does three things
+that are most likely desired behavior for a reverse proxy.  Namely the default
+request middleware:
+
+1. Copies request headers from `incoming` to `outgoing`. (`CopyHeaders`)
+2. Copies the request body from `incoming` to `outgoing`. (`CopyBody`)
+3. Fills the `Content-Length` header of `outgoing`. (`CopyContentLength`)
 
 #### Roundtrip Middleware
 

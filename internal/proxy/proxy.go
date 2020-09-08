@@ -83,8 +83,11 @@ func (p *Proxy) makeHandler(route routes.Route) http.Handler {
 func (p *Proxy) prepareRequest(incomingRequest *http.Request, outgoingRequest *http.Request) error {
 	middlewareChain := middleware.FinishRequestPrep
 
-	for _, middleware := range p.RequestMiddleware {
-		middlewareChain = middleware(middlewareChain)
+	// NOTE: (jdlubrano)
+	// Iterate in reverse so that middleware at the end of the chain are
+	// executed last.
+	for i := len(p.RequestMiddleware) - 1; i >= 0; i-- {
+		middlewareChain = p.RequestMiddleware[i](middlewareChain)
 	}
 
 	if err := middlewareChain(incomingRequest, outgoingRequest); err != nil {
