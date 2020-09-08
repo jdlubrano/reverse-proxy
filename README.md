@@ -180,7 +180,50 @@ request middleware:
 
 #### Roundtrip Middleware
 
-Coming soon!
+Roundtrip middleware allows you to add middleware around the entire proxied
+request cycle.  It is particularly useful for things like distributed tracing.
+`RoundtripMiddleware` can be any chainable function that accepts and returns
+an `http.Handler`.
+
+```go
+type RoundtripMiddleware func(next http.Handler) http.Handler
+```
+
+For example, you could implement some logging middleware to wrap requests and
+responses.
+
+```go
+func LoggingMiddleware(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                fmt.Printf("Received request %+v\n", r)
+                next.ServeHTTP(w, r)
+                fmt.Printf("Finishing request %+v\n", r)
+        })
+}
+```
+
+You can add `RoundtripMiddleware` before starting your `Proxy`.
+
+```go
+import (
+        "net/http"
+
+	"github.com/jdlubrano/reverse-proxy/internal/middleware"
+	"github.com/jdlubrano/reverse-proxy/internal/proxy"
+)
+
+proxy := proxy.NewProxy(...)
+
+// Adding middleware to the start of the middleware chain
+proxy.RoundtripMiddleware = append(proxy.RoundtripMiddleware, LoggingMiddleware)
+
+// ...start the proxy
+```
+
+There is no `RoundtripMiddleware` configured by default.  `RoundtripMiddleware`
+is called from the outside-in.  You have a chance to execute code before and/or
+after the `next` middleware in the chain depending on when you hand off control
+to the `next` middleware.
 
 ## Requirements
 
