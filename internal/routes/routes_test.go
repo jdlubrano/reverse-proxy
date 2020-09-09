@@ -26,6 +26,7 @@ func TestNewRoutesConfigFromYaml(t *testing.T) {
     forwarded_request_path: '/api/pong'`
 
 	_, err = yamlFile.WriteString(routesYaml)
+	assert.Nil(err)
 
 	t.Run("when the YAML file exists and contains valid YAML", func(t *testing.T) {
 		routesConfig, err := NewRoutesConfigFromYaml(yamlFile.Name())
@@ -42,6 +43,31 @@ func TestNewRoutesConfigFromYaml(t *testing.T) {
 		assert.Equal("/route2", route2.IncomingRequestPath)
 		assert.Equal("http://service2.com", route2.ForwardedRequestURL)
 		assert.Equal("/api/pong", route2.ForwardedRequestPath)
+	})
+
+	t.Run("when the YAML file includes expandable ENV variables", func(t *testing.T) {
+		url := "http://env-service.com"
+		os.Setenv("FORWARDED_REQUEST_URL", url)
+
+		envRoutesYaml := `routes:
+  - incoming_request_path: '/route1'
+    forwarded_request_url: ${FORWARDED_REQUEST_URL}
+    forwarded_request_path: '/api/ping'`
+
+		envYamlFile, err := ioutil.TempFile("", "testRoutesWithEnv.yml")
+		assert.Nil(err)
+		defer envYamlFile.Close()
+		defer os.Remove(envYamlFile.Name())
+
+		_, err = envYamlFile.WriteString(envRoutesYaml)
+		assert.Nil(err)
+
+		routesConfig, err := NewRoutesConfigFromYaml(envYamlFile.Name())
+		assert.Nil(err)
+
+		route := routesConfig.Routes[0]
+
+		assert.Equal(url, route.ForwardedRequestURL)
 	})
 
 	t.Run("when the YAML file exists and contains invalid YAML", func(t *testing.T) {
