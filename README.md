@@ -78,6 +78,34 @@ The `REVERSE_PROXY_PORT` and `REVERSE_PROXY_ROUTES_FILE` environment variables
 should be changed based on your requirements.  You should be able to build the
 Docker image from that Dockerfile and `docker run` the reverse proxy.
 
+### Routes
+
+Routes define the supported endpoints for your `Proxy`.  Routes should be stored
+in a YAML file.  There are three values that comprise a route:
+`incoming_request_path`, `forwarded_request_url`, and `forwarded_request_path`.
+In the following example, let's suppose your proxy is available at
+`https://proxy.example.com`.  In that case, any request received at
+`https://proxy.example.com/hello` would be forwarded to
+`https://internal.example.com/internal/api`.
+
+```yaml
+routes:
+  - incoming_request_path: '/hello'
+    forwarded_request_url: 'https://internal.example.com'
+    forwarded_request_path: '/internal/api'
+```
+
+You can use `ENV` variables when you define your routes, too.  For example,
+`INTERNAL_SERVICE_URL` in the following routes configuration will be replaced
+by the value of the `INTERNAL_SERVICE_URL` environment variable.
+
+```yaml
+routes:
+  - incoming_request_path: '/hello'
+    forwarded_request_url: ${INTERNAL_SERVICE_URL}
+    forwarded_request_path: '/internal/api'
+```
+
 ### Customizing Behavior
 
 The `main.go` file in this repo attempts to be a barebones example of how to

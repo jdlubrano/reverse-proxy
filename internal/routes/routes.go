@@ -1,8 +1,10 @@
 package routes
 
 import (
-	"github.com/go-yaml/yaml"
 	"io/ioutil"
+	"os"
+
+	"github.com/go-yaml/yaml"
 )
 
 type Route struct {
@@ -19,6 +21,7 @@ func NewRoutesConfigFromYaml(yamlPath string) (*RoutesConfig, error) {
 	routesConfig := RoutesConfig{}
 
 	routesYaml, err := ioutil.ReadFile(yamlPath)
+	routesYaml = []byte(os.ExpandEnv(string(routesYaml)))
 
 	if err != nil {
 		return nil, err
