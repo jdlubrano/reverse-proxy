@@ -8,12 +8,13 @@ import (
 	"time"
 
 	"github.com/jdlubrano/reverse-proxy/internal/logger"
+	"github.com/jdlubrano/reverse-proxy/internal/middleware"
 	"github.com/jdlubrano/reverse-proxy/internal/routes"
 )
 
 type Proxy struct {
-	RequestMiddleware   []RequestMiddleware
-	RoundtripMiddleware []RoundtripMiddleware
+	RequestMiddleware   []middleware.RequestMiddleware
+	RoundtripMiddleware []middleware.RoundtripMiddleware
 
 	client       *http.Client
 	logger       logger.Logger
@@ -25,8 +26,12 @@ type Proxy struct {
 
 func NewProxy(logger logger.Logger, routesConfig *routes.RoutesConfig, port int) *Proxy {
 	return &Proxy{
-		RequestMiddleware:   []RequestMiddleware{CopyHeaders, CopyBody, CopyContentLength},
-		RoundtripMiddleware: []RoundtripMiddleware{},
+		RequestMiddleware: []middleware.RequestMiddleware{
+			middleware.CopyHeaders,
+			middleware.CopyBody,
+			middleware.CopyContentLength,
+		},
+		RoundtripMiddleware: []middleware.RoundtripMiddleware{},
 
 		client:       &http.Client{},
 		logger:       logger,
@@ -76,10 +81,13 @@ func (p *Proxy) makeHandler(route routes.Route) http.Handler {
 }
 
 func (p *Proxy) prepareRequest(incomingRequest *http.Request, outgoingRequest *http.Request) error {
-	middlewareChain := FinishRequestPrep
+	middlewareChain := middleware.FinishRequestPrep
 
-	for _, middleware := range p.RequestMiddleware {
-		middlewareChain = middleware(middlewareChain)
+	// NOTE: (jdlubrano)
+	// Iterate in reverse so that middleware at the end of the chain are
+	// executed last.
+	for i := len(p.RequestMiddleware) - 1; i >= 0; i-- {
+		middlewareChain = p.RequestMiddleware[i](middlewareChain)
 	}
 
 	if err := middlewareChain(incomingRequest, outgoingRequest); err != nil {

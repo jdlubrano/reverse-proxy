@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jdlubrano/reverse-proxy/internal/logger"
+	"github.com/jdlubrano/reverse-proxy/internal/middleware"
 	"github.com/jdlubrano/reverse-proxy/internal/routes"
 	"github.com/stretchr/testify/assert"
 )
@@ -223,4 +224,89 @@ func TestProxyCustomHandler(t *testing.T) {
 	assert.Nil(err)
 	assert.Equal(200, resp.StatusCode)
 	assert.Equal(`{"status": "OK"}`, string(body))
+}
+
+func TestProxyRequestMiddleware(t *testing.T) {
+	assert := assert.New(t)
+	logger := &logger.NullLogger{}
+	headerPresent := false
+
+	addMyHeader := func(next middleware.RequestPreparer) middleware.RequestPreparer {
+		return func(i *http.Request, o *http.Request) error {
+			o.Header.Add("X-MyHeader", "test")
+			return next(i, o)
+		}
+	}
+
+	downstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		headerPresent = r.Header.Get("X-MyHeader") == "test"
+		w.Write([]byte(`{"ping": "pong"}`))
+	}))
+
+	defer downstreamServer.Close()
+
+	pingRoute := routes.Route{
+		IncomingRequestPath:  "/test/ping",
+		ForwardedRequestURL:  downstreamServer.URL,
+		ForwardedRequestPath: "/ping",
+	}
+
+	routesConfig := &routes.RoutesConfig{
+		Routes: []routes.Route{pingRoute},
+	}
+
+	proxy := NewProxy(logger, routesConfig, 8080)
+	proxy.RequestMiddleware = append(proxy.RequestMiddleware, middleware.RequestMiddleware(addMyHeader))
+
+	go func() {
+		proxy.Start()
+	}()
+	defer proxy.Stop()
+
+	resp, err := http.Get("http://localhost:8080/test/ping")
+	assert.Nil(err)
+
+	body, err := ioutil.ReadAll(resp.Body)
+	assert.Nil(err)
+
+	assert.Equal(`{"ping": "pong"}`, string(body))
+	assert.True(headerPresent)
+}
+
+func TestProxyRoundtripMiddleware(t *testing.T) {
+	assert := assert.New(t)
+	logger := &logger.NullLogger{}
+
+	pingRoute := routes.Route{
+		IncomingRequestPath:  "/test/ping",
+		ForwardedRequestURL:  "http://localhost:3000",
+		ForwardedRequestPath: "/ping",
+	}
+
+	routesConfig := &routes.RoutesConfig{
+		Routes: []routes.Route{pingRoute},
+	}
+
+	proxy := NewProxy(logger, routesConfig, 8080)
+
+	requestCounter := 0
+
+	middlewareFunc := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCounter++
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	mw := middleware.RoundtripMiddleware(middlewareFunc)
+	proxy.RoundtripMiddleware = append(proxy.RoundtripMiddleware, mw)
+
+	go func() {
+		proxy.Start()
+	}()
+	defer proxy.Stop()
+
+	_, err := http.Get("http://localhost:8080/test/ping")
+	assert.Nil(err)
+	assert.Equal(1, requestCounter)
 }

@@ -82,7 +82,12 @@ Docker image from that Dockerfile and `docker run` the reverse proxy.
 
 The `main.go` file in this repo attempts to be a barebones example of how to
 start the `Proxy` within a Go app.  Some of the features of the reverse proxy
-are not used in `main.go`, however.
+are not used in `main.go`, however.  There are essentially three ways to
+customize the behavior of a `Proxy`.
+
+1. Custom `http.Handler`s
+1. Adding `RequestMiddleware`
+1. Adding `RoundtripMiddleware`
 
 #### Custom Handlers
 
@@ -109,11 +114,120 @@ proxy.AddCustomHandler("/healthcheck", http.HandlerFunc(handlerFunc))
 
 #### Request Middleware
 
-Coming soon!
+Request middleware is designed to modify the outgoing request that eventually
+gets forwarded to the configured route/destination.  There are two types to
+be aware of when it comes to implementing your own request middleware.
+
+The first type is a `RequestPreparer`.  A `RequestPreparer` is defined as a
+
+```go
+type RequestPreparer func(incoming *http.Request, outgoing *http.Request) error
+```
+
+The `incoming` request is the request received by the proxy.  The `outgoing`
+request is the request that will eventually be forwarded a downstream location
+(as configured by the routes).
+
+You will most likely not define a `RequestPreparer`, however.  You are far
+more likely to define a `RequestMiddleware`.  A `RequestMiddleware` is defined
+as
+
+```go
+type RequestMiddleware func(next RequestPreparer) RequestPreparer
+```
+
+By accepting a `next` parameter, you ensure that your middleware integrates
+with existing `RequestMiddleware`.
+
+For example, you could add a header to the outgoing request:
+
+```go
+func AddMyHeader(next middleware.RequestPreparer) middleware.RequestPreparer {
+        return func(incoming *http.Request, outgoing *http.Request) error {
+                outgoing.Header.Add("My-Header", "My Content")
+                return next(incoming, outgoing)
+        }
+}
+```
+
+You can insert your `RequestMiddleware` anywhere in the `RequestMiddleware`
+chain of your `Proxy`.  `RequestMiddleware` at the end of the chain runs after
+`RequestMiddleware` at the beginning of the chain.
+
+```go
+import (
+        "net/http"
+
+	"github.com/jdlubrano/reverse-proxy/internal/middleware"
+	"github.com/jdlubrano/reverse-proxy/internal/proxy"
+)
+
+proxy := proxy.NewProxy(...)
+
+// Adding middleware to the end of the middleware chain
+proxy.RequestMiddleware = append(proxy.RequestMiddleware, AddMyHeader)
+
+// Adding middleware to the start of the middleware chain.
+// Note that the default middleware would run after your custom middleware in
+// this case.  The default middleware may undo whatever your middlware is doing.
+proxy.RequestMiddleware = append([]middleware.RequestMiddleware{AddMyHeader}, ...proxy.RequestMiddleware)
+
+// ...start the proxy
+```
+
+The default middleware chain does three things that are most likely desired
+behavior for a reverse proxy.  Namely the default request middleware:
+
+1. Copies request headers from `incoming` to `outgoing`. (`CopyHeaders`)
+2. Copies the request body from `incoming` to `outgoing`. (`CopyBody`)
+3. Fills the `Content-Length` header of `outgoing`. (`CopyContentLength`)
 
 #### Roundtrip Middleware
 
-Coming soon!
+Roundtrip middleware allows you to add middleware around the entire proxied
+request cycle.  It is particularly useful for things like distributed tracing.
+`RoundtripMiddleware` can be any chainable function that accepts and returns
+an `http.Handler`.
+
+```go
+type RoundtripMiddleware func(next http.Handler) http.Handler
+```
+
+For example, you could implement some logging middleware to wrap requests and
+responses.
+
+```go
+func LoggingMiddleware(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                fmt.Printf("Received request %+v\n", r)
+                next.ServeHTTP(w, r)
+                fmt.Printf("Finishing request %+v\n", r)
+        })
+}
+```
+
+You can add `RoundtripMiddleware` before starting your `Proxy`.
+
+```go
+import (
+        "net/http"
+
+	"github.com/jdlubrano/reverse-proxy/internal/middleware"
+	"github.com/jdlubrano/reverse-proxy/internal/proxy"
+)
+
+proxy := proxy.NewProxy(...)
+
+// Adding middleware to the start of the middleware chain
+proxy.RoundtripMiddleware = append(proxy.RoundtripMiddleware, LoggingMiddleware)
+
+// ...start the proxy
+```
+
+There is no `RoundtripMiddleware` configured by default.  `RoundtripMiddleware`
+is called from the outside-in.  You have a chance to execute code before and/or
+after the `next` middleware in the chain depending on when you hand off control
+to the `next` middleware.
 
 ## Requirements
 
@@ -121,9 +235,9 @@ Coming soon!
 
 ## Development
 
-Build the project
+Build and test the project
 ```
-go build
+make build && make test
 ```
 
 Start the Reverse Proxy
